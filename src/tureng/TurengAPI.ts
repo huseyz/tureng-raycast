@@ -38,11 +38,10 @@ export default class TurengAPI {
   private idCounter = 0;
 
   public async complete(term: string): Promise<string[]> {
-    if (!term) {
+    if (!term || term.trim() === '') {
       return [];
     }
-    term = encodeURIComponent(term);
-    const url = this.AUTOCOMPLETE_URL + encodeURIComponent(term)
+    const url = this.AUTOCOMPLETE_URL + encodeURIComponent(term.trimStart());
     try {
       const response = await fetch(url);
       return (await response.json()) as string[];
