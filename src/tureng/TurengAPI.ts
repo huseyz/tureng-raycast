@@ -9,7 +9,7 @@ interface SearchResponse {
     IsFound: number;
     IsTRToEN: number;
     Suggestions: string[];
-    Results: {  
+    Results: {
       CategoryEN: string;
       CategoryTR: string;
       Term: string;
@@ -41,13 +41,19 @@ export default class TurengAPI {
     if (!term || term.trim() === '') {
       return [];
     }
-    const url = this.AUTOCOMPLETE_URL + encodeURIComponent(term.trimStart());
     try {
+      const url = this.AUTOCOMPLETE_URL + encodeURIComponent(term.trimStart());
       const response = await fetch(url);
-      return (await response.json()) as string[];
+      const result = (await response.json()) as string[];
+      if(result !== undefined && result.length > 0) {
+        return result;
+      } else {
+        const searchResponse = await this.search(term);
+        return Promise.resolve(searchResponse.MobileResult.Suggestions);
+      }
     } catch (error) {
       console.log(error);
-      return [];
+      return Promise.resolve([]);
     }
   }
 
@@ -56,8 +62,7 @@ export default class TurengAPI {
       enToTR: [],
       trToEN: []
     };
-    const response = await fetch(this.SEARCH_URL, this.searchRequest(word));
-    const searchResponse = await response.json() as SearchResponse;
+    const searchResponse = await this.search(word);
     if (searchResponse.IsSuccessful && searchResponse.MobileResult.IsFound === 1) {
       return searchResponse.MobileResult.Results.reduce((prev: LookupResponse, curr: SearchResultItem): LookupResponse => {
         const enToTR = curr.CategoryEN.includes('en->tr');
@@ -65,28 +70,35 @@ export default class TurengAPI {
         (enToTR ? prev.enToTR : prev.trToEN).push(item);
         return prev;
       }, emptyLookupResponse);
+    } else {
+      console.log(searchResponse);
     }
-    return emptyLookupResponse;
+    return Promise.resolve(emptyLookupResponse);
   }
-  
- private searchRequest(word: string): RequestInit {
-  return {
-    method: 'POST',
-    headers: this.REQUEST_HEADERS,
-    body: JSON.stringify({
-      Term: word,
-      Code: Md5.hashStr(`${word}${this.SECRET}`)
-    }),
-  };
- }
 
- private toLookupResponseItem(result: SearchResultItem, id: number, enToTR: boolean): LookupResponseItem {
-  return {
-    id: id,
-    term: result.Term,
-    category: enToTR ? result.CategoryTR : result.CategoryEN,
-    type: enToTR ? result.TypeTR : result.TypeEN,
-  };
- }
+  private async search(word: string): Promise<SearchResponse> {
+    const response = await fetch(this.SEARCH_URL, this.searchRequest(word));
+    return await response.json() as SearchResponse;
+  }
+
+  private searchRequest(word: string): RequestInit {
+    return {
+      method: 'POST',
+      headers: this.REQUEST_HEADERS,
+      body: JSON.stringify({
+        Term: word,
+        Code: Md5.hashStr(`${word}${this.SECRET}`)
+      }),
+    };
+  }
+
+  private toLookupResponseItem(result: SearchResultItem, id: number, enToTR: boolean): LookupResponseItem {
+    return {
+      id: id,
+      term: result.Term,
+      category: enToTR ? result.CategoryTR : result.CategoryEN,
+      type: enToTR ? result.TypeTR : result.TypeEN,
+    };
+  }
 
 }
